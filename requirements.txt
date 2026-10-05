@@ -1,0 +1,7 @@
+Django>=5.0,<5.3
+psycopg2-binary>=2.9,<3.0
+djangorestframework>=3.15,<4.0
+django-filter>=24.0,<25.0
+drf-spectacular>=0.27,<1.0
+openai>=1.100,<2.0
+Pillow>=10,<12

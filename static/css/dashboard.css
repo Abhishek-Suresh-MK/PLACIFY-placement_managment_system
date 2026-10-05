@@ -1,0 +1,192 @@
+/* stylesDASHBOARD.css */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Poppins', sans-serif;
+}
+
+body {
+    position: relative;
+    background: url('../images/college-bg.jpeg') no-repeat center center/cover;
+    background-color: #101010; /* fallback while the background photo is missing/loading */
+    min-height: 100vh;
+    padding: 20px;
+    color: #ffffff;
+}
+
+.dashboard-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    animation: fadeIn 1s ease-in;
+}
+
+/* Fade In Animation */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Card Styling */
+.student-details, .result-section, .announcements {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(5px);
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.student-details:hover, .result-section:hover, .announcements:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+}
+
+/* Headers */
+h2 {
+    color: #fff;
+    margin-bottom: 15px;
+    position: relative;
+    padding-bottom: 10px;
+}
+
+h2:after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 50px;
+    height: 3px;
+    background: linear-gradient(to right, #00ddeb, #ff6b6b);
+    border-radius: 2px;
+}
+h1 {
+    color: #fff;
+    margin-bottom: 15px;
+    position: relative;
+    padding-bottom: 10px;
+}
+
+h1:after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 50px;
+    height: 3px;
+    background: linear-gradient(to right, #00ddeb, #ff6b6b);
+    border-radius: 2px;
+}
+/* Lists */
+.details-list, .result-list {
+    list-style: none;
+}
+
+.details-list li, .result-list li {
+    margin: 10px 0;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.details-list li:hover, .result-list li:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: translateX(5px);
+}
+
+strong {
+    color: #00ddeb;
+}
+
+/* Announcements */
+.announcements {
+    grid-column: 1 / -1; /* Span across both columns */
+}
+
+.announcement-item {
+    background: rgba(255, 255, 255, 0.08);
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 10px;
+    transition: all 0.3s ease;
+    animation: slideIn 0.5s ease-out;
+}
+
+.announcement-item:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.02);
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: translateX(-20px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+.announcement-item h3 {
+    color: #ff6b6b;
+    margin-bottom: 5px;
+}
+
+.announcement-item p {
+    color: #ddd;
+    line-height: 1.5;
+}
+
+.announcement-item small {
+    color: #bbb;
+    display: block;
+    margin-top: 5px;
+}
+
+/* Logout Button */
+.logout-btn {
+    display: inline-block;
+    margin: 20px auto;
+    padding: 12px 25px;
+    background: linear-gradient(45deg, #ff6b6b, #ff8e53);
+    color: #fff;
+    text-decoration: none;
+    border-radius: 25px;
+    text-align: center;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+    border: none;
+    font-family: 'Poppins', sans-serif;
+    font-size: 15px;
+    cursor: pointer;
+}
+
+.logout-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(255, 107, 107, 0.6);
+    background: linear-gradient(45deg, #ff8e53, #ff6b6b);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .dashboard-container {
+        grid-template-columns: 1fr;
+    }
+    
+    .student-details, .result-section {
+        grid-column: 1 / -1;
+    }
+}
+
+/* Background Pattern */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: url('https://www.transparenttextures.com/patterns/stardust.png');
+    opacity: 0.1;
+    z-index: -1;
+}

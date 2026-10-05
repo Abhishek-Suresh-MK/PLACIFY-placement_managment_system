@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}Candidate Profile | PLACIFY{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="section-heading"><div><h1>Candidate Profile</h1><p class="muted">Read-only candidate information.</p></div><span class="badge">{{ application.get_status_display }}</span></div>
+  <div class="form-grid">
+    <div class="field"><label>Photo</label>{% if application.student.photo %}<img src="{{ application.student.photo.url }}" alt="Candidate photo" style="max-width:160px;border-radius:10px">{% else %}<span class="muted">No photo</span>{% endif %}</div>
+    <div class="field"><label>Name</label><div>{{ application.student.user.name }}</div></div>
+    <div class="field"><label>Email</label><div>{{ application.student.user.email }}</div></div>
+    <div class="field"><label>Phone</label><div>{{ application.student.phone }}</div></div>
+    <div class="field"><label>College</label><div>{{ application.student.college.name }}</div></div>
+    <div class="field"><label>Department</label><div>{{ application.student.department.name }} ({{ application.student.department.code }})</div></div>
+    <div class="field"><label>Current Year</label><div>{{ application.student.get_current_year_display }}</div></div>
+    <div class="field"><label>CGPA</label><div>{{ application.student.cgpa }}</div></div>
+    <div class="field"><label>Backlogs</label><div>{{ application.student.backlogs }}</div></div>
+    <div class="field"><label>Passout Year</label><div>{{ application.student.passout_year }}</div></div>
+    <div class="field full"><label>Skills</label><div>{% for skill in application.student.skills.all %}<span class="badge">{{ skill.name }}</span>{% empty %}<span class="muted">No skills listed.</span>{% endfor %}</div></div>
+    <div class="field full"><label>Resume</label>{% if application.student.resume %}<a class="btn" href="{{ application.student.resume.url }}" target="_blank">View resume</a>{% else %}<span class="muted">No resume uploaded.</span>{% endif %}</div>
+  </div>
+</div>
+{% endblock %}

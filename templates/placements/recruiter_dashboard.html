@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Recruiter Dashboard | PLACIFY{% endblock %}
+{% block content %}
+<div class="dashboard-header"><div><h1>Recruiter Workspace</h1><p class="muted">{{ recruiter.company.name }} · {{ recruiter.user.name }}</p><p class="muted">Candidate records are read-only. You can update only application status and recruiter remarks.</p></div></div>
+<div class="card assigned-card"><div class="section-heading"><h2>Assigned drives</h2><span class="badge">{{ drives|length }} assigned</span></div><div class="actions">{% for d in drives %}<span class="badge">{{ d.title }} · {{ d.company.name }}</span>{% empty %}<span class="muted">No drives assigned.</span>{% endfor %}</div></div>
+<form class="card filter-card" method="get">
+  <div class="section-heading"><div><h2>Candidate filters</h2><p class="muted">Multiple skills can be selected. Choose whether candidates must have all or any selected skills.</p></div></div>
+  <div class="form-grid">
+    <div class="field"><label>Search</label><input name="search" value="{{ filters.search|default:'' }}" placeholder="Candidate name, email or drive"></div>
+    <div class="field"><label>Status</label><select name="status"><option value="">All statuses</option>{% for v,l in statuses %}<option value="{{ v }}" {% if filters.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+    <div class="field"><label>College</label><select name="college"><option value="">All colleges</option>{% for c in colleges %}<option value="{{ c.id }}" {% if filters.college == c.id|stringformat:'s' %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></div>
+    <div class="field"><label>Department</label><select name="department"><option value="">All departments</option>{% for d in departments %}<option value="{{ d.id }}" {% if filters.department == d.id|stringformat:'s' %}selected{% endif %}>{{ d.name }} ({{ d.code }})</option>{% endfor %}</select></div>
+    <div class="field"><label>Minimum CGPA</label><input name="min_cgpa" value="{{ filters.min_cgpa|default:'' }}" type="number" min="0" max="10" step=".01"></div>
+    <div class="field"><label>Skills</label><select name="skills" multiple size="7">{% for s in skills %}<option value="{{ s.id }}" {% if s.id|stringformat:'s' in filters.skills %}selected{% endif %}>{{ s.name }}</option>{% endfor %}</select></div>
+    <div class="field"><label>Skill match</label><select name="skill_mode"><option value="all" {% if filters.skill_mode != 'any' %}selected{% endif %}>All selected skills</option><option value="any" {% if filters.skill_mode == 'any' %}selected{% endif %}>Any selected skill</option></select></div>
+    <div class="field"><label>Sort</label><select name="ordering"><option value="-applied_at" {% if ordering == '-applied_at' %}selected{% endif %}>Newest application</option><option value="name" {% if ordering == 'name' %}selected{% endif %}>Candidate name A-Z</option><option value="-name" {% if ordering == '-name' %}selected{% endif %}>Candidate name Z-A</option><option value="cgpa" {% if ordering == 'cgpa' %}selected{% endif %}>CGPA low-high</option><option value="-cgpa" {% if ordering == '-cgpa' %}selected{% endif %}>CGPA high-low</option><option value="college" {% if ordering == 'college' %}selected{% endif %}>College A-Z</option><option value="status" {% if ordering == 'status' %}selected{% endif %}>Status</option></select></div>
+  </div>
+  <div class="actions"><button class="btn" type="submit">Apply filters</button><a class="btn secondary" href="{% url 'placements:recruiter_dashboard' %}">Clear</a></div>
+</form>
+<div class="section-heading"><h2>Candidate applications</h2></div>
+<div class="table-wrap"><table class="table"><thead><tr><th>Candidate</th><th>College</th><th>Department</th><th>Drive</th><th>CGPA</th><th>Skills</th><th>Status</th><th>Action</th></tr></thead><tbody>
+{% for a in applications %}<tr><td><strong>{{ a.student.user.name }}</strong><br><small>{{ a.student.user.email }}</small></td><td>{{ a.student.college.name }}</td><td>{{ a.student.department.code }}</td><td>{{ a.placement_drive.company.name }}<br><small>{{ a.placement_drive.job_role }}</small></td><td>{{ a.student.cgpa }}</td><td>{% for s in a.student.skills.all %}<span class="badge">{{ s.name }}</span>{% empty %}—{% endfor %}</td><td><span class="badge">{{ a.get_status_display }}</span></td><td><a class="btn secondary" href="{% url 'placements:recruiter_candidate' a.pk %}">View profile</a><form method="post" action="{% url 'placements:recruiter_update_application' a.pk %}">{% csrf_token %}<select name="status" aria-label="Application status">{% for v,l in statuses %}<option value="{{ v }}" {% if a.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select><input name="remarks" value="{{ a.remarks }}" placeholder="Recruiter remark"><button class="btn" type="submit">Update</button></form></td></tr>
+{% empty %}<tr><td class="empty" colspan="8">No applications match the current filters.</td></tr>{% endfor %}
+</tbody></table></div>
+{% include 'pagination.html' with page_obj=applications %}
+{% endblock %}

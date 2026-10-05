@@ -1,0 +1,141 @@
+/* General Styles */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 40px;
+    background: linear-gradient(135deg, #e0eafc 0%, #cfdef3 100%);
+    min-height: 100vh;
+}
+
+/* Headings */
+h1 {
+    color: #2c3e50;
+    text-align: center;
+    margin-bottom: 40px;
+    font-size: 32px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+h2 {
+    color: #34495e;
+    margin-top: 40px;
+    margin-bottom: 25px;
+    font-size: 24px;
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 5px;
+    display: inline-block;
+}
+
+/* Form Container */
+form {
+    background-color: rgba(255, 255, 255, 0.95);
+    padding: 40px;
+    border-radius: 12px;
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+    max-width: 650px;
+    margin: 0 auto;
+    transition: transform 0.3s ease;
+}
+
+form:hover {
+    transform: translateY(-2px);
+}
+
+/* Labels and Inputs */
+label {
+    display: block;
+    margin-bottom: 10px;
+    color: #2c3e50;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+input[type="text"],
+input[type="tel"],
+input[type="email"],
+input[type="number"],
+select {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 20px;
+    border: 1px solid #dfe6e9;
+    border-radius: 6px;
+    box-sizing: border-box;
+    font-size: 15px;
+    background-color: #f9fafb;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+input[type="text"]:focus,
+input[type="tel"]:focus,
+input[type="email"]:focus,
+input[type="number"]:focus,
+select:focus {
+    border-color: #3498db;
+    box-shadow: 0 0 5px rgba(52, 152, 219, 0.3);
+    outline: none;
+}
+
+/* Button */
+button[type="submit"] {
+    background-color: #3498db;
+    color: white;
+    padding: 14px 28px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 600;
+    width: 100%;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+button[type="submit"]:hover {
+    background-color: #2980b9;
+    transform: translateY(-2px);
+}
+
+button[type="submit"]:active {
+    transform: translateY(0);
+}
+
+/* Back Link */
+a {
+    display: block;
+    text-align: center;
+    margin-top: 25px;
+    color: #3498db;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 15px;
+    transition: color 0.3s ease;
+}
+
+a:hover {
+    color: #2980b9;
+    text-decoration: underline;
+}
+
+/* Responsive Design */
+@media (max-width: 480px) {
+    body {
+        padding: 20px;
+    }
+
+    form {
+        padding: 25px;
+    }
+
+    h1 {
+        font-size: 26px;
+    }
+
+    h2 {
+        font-size: 20px;
+    }
+
+    button[type="submit"] {
+        padding: 12px 20px;
+    }
+}

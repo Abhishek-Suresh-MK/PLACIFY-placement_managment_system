@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}PLACIFY — Your Placement Gateway{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/index.css' %}">{% endblock %}
+{% block content %}
+<section id="home" class="landing-hero">
+  <div class="landing-background"><div class="landing-slide landing-slide-one"></div><div class="landing-slide landing-slide-two"></div><div class="landing-overlay"></div></div>
+  <div class="landing-content">
+    <div class="login-card">
+      <img src="{% static 'images/logo.png' %}" alt="PLACIFY" class="landing-logo" onerror="this.style.display='none'">
+      <p class="eyebrow">PLACEMENT MANAGEMENT PLATFORM</p>
+      <h1>Welcome to PLACIFY</h1>
+      <p class="landing-subtitle">One place to discover opportunities, manage applications and connect students with recruiters.</p>
+      {% if just_registered %}<div class="landing-alert success-msg">Registration successful. Please sign in with your email.</div>{% endif %}
+      {% if form.non_field_errors %}<div class="landing-alert error-msg">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+      <form action="{% url 'placements:index' %}" method="post" class="login-form">
+        {% csrf_token %}
+        <label class="sr-only" for="id_email">Email</label>
+        <input type="email" id="id_email" name="email" placeholder="Email address" autocomplete="email" required autofocus>
+        <label class="sr-only" for="id_password">Password</label>
+        <input type="password" id="id_password" name="password" placeholder="Password" autocomplete="current-password" required>
+        <button type="submit" name="login" class="login-btn">Sign in</button>
+      </form>
+      <p class="register-prompt">New to PLACIFY? <a href="{% url 'accounts:register' %}">Create a student account</a></p>
+      <p class="register-prompt"><a href="{% url 'accounts:password_reset' %}">Forgot password?</a></p>
+    </div>
+  </div>
+</section>
+<section id="gallery" class="home-section">
+  <div class="section-heading"><div><p class="eyebrow dark">PLACIFY MOMENTS</p><h2>Gallery</h2><p class="muted">Highlights from placement activities and campus events.</p></div></div>
+  <div class="home-gallery">{% for item in gallery %}<article class="gallery-card"><img src="{{ item.image.url }}" alt="{{ item.title }}"><div class="gallery-caption"><strong>{{ item.title }}</strong>{% if item.company %}<span>{{ item.company.name }}</span>{% endif %}</div></article>{% empty %}<div class="card empty">No gallery entries published yet.</div>{% endfor %}</div>
+</section>
+<section id="announcements" class="home-section">
+  <div class="section-heading"><div><p class="eyebrow dark">LATEST UPDATES</p><h2>Placement Announcements</h2><p class="muted">Current information published through PLACIFY.</p></div></div>
+  <div class="home-announcements">{% for announcement in announcements %}<article class="card announcement-card"><div class="announcement-meta"><span class="badge">{{ announcement.get_status_display }}</span>{% if announcement.drive_date %}<span>{{ announcement.drive_date|date:"d M Y" }}</span>{% endif %}</div><h3>{{ announcement.title }}</h3><p>{{ announcement.content|linebreaksbr }}</p><small class="muted">{{ announcement.created_at|date:"d M Y, h:i A" }}</small></article>{% empty %}<div class="card empty">No placement announcements yet.</div>{% endfor %}</div>
+</section>
+<section class="home-links"><a class="home-link-card" href="{% url 'placements:history' %}"><strong>Placement History</strong><span>Explore published placement outcomes.</span></a><a class="home-link-card" href="{% url 'placements:materials' %}"><strong>Study Materials</strong><span>Access preparation resources and links.</span></a></section>
+{% endblock %}

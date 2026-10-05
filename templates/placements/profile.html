@@ -1,0 +1,5 @@
+{% extends 'base.html' %}
+{% block title %}Profile | PLACIFY{% endblock %}
+{% block content %}
+<div class="card"><h1>{% if admin_mode %}Edit Student{% else %}My Profile{% endif %}</h1><p class="muted">{% if admin_mode %}Administrators can correct student profile data. Results are managed separately under Applications & Results.{% else %}Keep your academic information, skills, photo and resume current for recruiters.{% endif %}</p><form method="post" enctype="multipart/form-data"><div class="form-grid">{% csrf_token %}{% for f in form %}<div class="field {% if f.name in 'address skills resume photo' %}full{% endif %}"><label for="{{f.id_for_label}}">{{f.label}}</label>{{f}}{% if f.help_text %}<small class="muted">{{f.help_text}}</small>{% endif %}{% for e in f.errors %}<span class="errors">{{e}}</span>{% endfor %}</div>{% endfor %}</div><br><button class="btn">Save changes</button></form></div>
+{% endblock %}

@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block title %}{{ resource|title }} | PLACIFY{% endblock %}
+{% block content %}
+<h1>{{ resource|title }}</h1>
+<div class="grid">
+<div class="card"><h2>{% if request.GET.edit %}Edit{% else %}Add{% endif %}</h2><form method="post" enctype="multipart/form-data">{% csrf_token %}<div class="form-grid">{% for f in form %}<div class="field {% if f.name in 'description content allowed_colleges allowed_departments required_skills recruiters students' %}full{% endif %}"><label for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}{% if f.help_text %}<small class="muted">{{ f.help_text }}</small>{% endif %}{% for e in f.errors %}<span class="errors">{{ e }}</span>{% endfor %}</div>{% endfor %}</div><br><button class="btn">Save</button>{% if request.GET.edit %}<a class="btn secondary" href="{% url 'placements:admin_resource' resource %}">Cancel</a>{% endif %}</form></div>
+<div class="card"><h2>Existing records</h2><div class="list">{% for item in items %}<div class="list-row"><strong>{{ item }}</strong><span><a href="?edit={{ item.pk }}">Edit</a><form method="post" action="{% url 'placements:admin_delete_resource' resource item.pk %}" class="inline">{% csrf_token %}<button type="submit">Delete</button></form></span></div>{% empty %}<p class="muted">No records.</p>{% endfor %}</div></div>
+</div>
+{% include 'pagination.html' with page_obj=items %}
+{% endblock %}

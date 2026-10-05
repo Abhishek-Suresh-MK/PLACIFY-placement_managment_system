@@ -1,0 +1,234 @@
+/* stylesHISTORY.css */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Poppins', sans-serif;
+}
+
+body {
+    background: url('../images/college-bg.jpeg') no-repeat center center/cover;
+    background-color: #101010; /* fallback while the background photo is missing/loading */
+    min-height: 100vh;
+    color: #fff;
+    position: relative;
+    overflow-x: hidden;
+}
+
+/* Overlay for Dark Background */
+.history-section::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 0;
+}
+
+/* Container */
+.history-section {
+    padding: 40px 20px;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.history-container {
+    max-width: 1200px;
+    width: 100%;
+    position: relative;
+    z-index: 1; /* Fixed typo: was zRewind-index */
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    padding: 30px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    animation: fadeIn 1s ease-in;
+}
+
+/* Fade In Animation */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Heading */
+h1 {
+    text-align: center;
+    font-size: 36px;
+    margin-bottom: 30px;
+    color: #fff;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    position: relative;
+}
+
+h1::after {
+    content: '';
+    position: absolute;
+    bottom: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60px;
+    height: 3px;
+    background: linear-gradient(to right, #007bff, #00ddeb);
+    border-radius: 2px;
+}
+
+/* Search Form */
+.search-form {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 30px;
+}
+
+.search-form input[type="text"] {
+    padding: 12px;
+    width: 300px;
+    border: none;
+    border-radius: 25px 0 0 25px;
+    font-size: 16px;
+    background: rgba(255, 255, 255, 0.9);
+    color: #333;
+    outline: none;
+    transition: width 0.3s ease, box-shadow 0.3s ease;
+}
+
+.search-form input[type="text"]:focus {
+    width: 320px;
+    box-shadow: 0 0 10px rgba(0, 123, 255, 0.5);
+}
+
+.search-form button {
+    padding: 12px 20px;
+    background: #007bff;
+    color: #fff;
+    border: none;
+    border-radius: 0 25px 25px 0;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background 0.3s ease, transform 0.3s ease;
+}
+
+.search-form button:hover {
+    background: #0056b3;
+    transform: translateY(-2px);
+}
+
+/* Table Styling */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+th, td {
+    padding: 15px;
+    text-align: left;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+th {
+    background: linear-gradient(45deg, #007bff, #00ddeb);
+    color: #fff;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+tr {
+    transition: all 0.3s ease;
+}
+
+tr:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: scale(1.01);
+}
+
+td {
+    font-size: 14px;
+    color: #ddd;
+}
+
+/* Logout Button */
+.logout-btn {
+    display: block;
+    width: 150px;
+    margin: 30px auto 0;
+    padding: 12px 25px;
+    background: linear-gradient(45deg, #ff6b6b, #ff8e53);
+    color: #fff;
+    text-decoration: none;
+    border-radius: 25px;
+    text-align: center;
+    font-size: 16px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+}
+
+.logout-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(255, 107, 107, 0.6);
+    background: linear-gradient(45deg, #ff8e53, #ff6b6b);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .history-container {
+        padding: 20px;
+    }
+    
+    table {
+        display: block;
+        overflow-x: auto;
+    }
+    
+    .search-form input[type="text"] {
+        width: 200px;
+    }
+    
+    .search-form input[type="text"]:focus {
+        width: 220px;
+    }
+    
+    h1 {
+        font-size: 28px;
+    }
+    
+    .logout-btn {
+        width: 120px;
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 480px) {
+    h1 {
+        font-size: 24px;
+    }
+    
+    .search-form {
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .search-form input[type="text"] {
+        width: 100%;
+        border-radius: 25px;
+    }
+    
+    .search-form button {
+        width: 100%;
+        border-radius: 25px;
+    }
+}
