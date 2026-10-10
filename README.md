@@ -77,3 +77,7 @@ List endpoints use the standard pagination class and support search/filter/order
 
 ## Production notes
 Use PostgreSQL, a strong `SECRET_KEY`, `DEBUG=False`, explicit `ALLOWED_HOSTS`, secure media storage and properly configured email. Run `python manage.py check --deploy` before deployment. Never commit `.env`, databases, virtual environments or uploaded media.
+
+### Login form note
+
+The login page submits the email address through Django’s `AuthenticationForm` field named `username`. This is required by Django’s default login form even when the custom user model uses email as `USERNAME_FIELD`. The visible field remains an email input.
