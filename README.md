@@ -23,15 +23,20 @@ python manage.py runserver
 
 If you are migrating from an older local PLACIFY database, **back it up first**. This release contains a major schema redesign. For a clean evaluation, a fresh database is recommended.
 
-## Seeded accounts
-`python manage.py seed_data` creates:
+## Seeded demo accounts
 
-- Admin: `admin@placify.local` / `AdminPass123!`
-- Recruiter: `recruiter@placify.local` / `RecruiterPass123!`
+Run `python manage.py seed_data` after migrations. The command is idempotent: rerunning it updates the named demo records instead of duplicating them.
 
-Override the values with `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `SEED_RECRUITER_EMAIL` and `SEED_RECRUITER_PASSWORD`.
+| Role | Email | Password |
+|---|---|---|
+| Administrator | `admin@placify.local` | `AdminPass123!` |
+| Recruiter (TCS) | `recruiter@placify.local` | `RecruiterPass123!` |
+| Student 1 — Ananya Nair | `student01@placify.local` | `StudentPass123!` |
+| Student 2 — Nikhil Raj | `student02@placify.local` | `StudentPass123!` |
 
-The seed command also creates a sample college, departments, skills and company.
+Override credentials with `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `SEED_RECRUITER_EMAIL`, `SEED_RECRUITER_PASSWORD`, and `SEED_STUDENT_PASSWORD`. These credentials are for local demos only; never use them in production.
+
+The seed creates CEM as the primary college, plus two comparison colleges for testing. Every seeded drive allows CEM; only the explicitly marked Federal Bank demo drive allows the two external colleges. It also creates six departments, a shared skills catalogue, six companies, eight drives in mixed states, two student profiles, applications with recruitment-stage results, on-campus placement history, targeted/global/draft announcements, published and draft study materials, and locally generated gallery placeholder images. All people, outcomes and contact details are synthetic demo data.
 
 ## Main routes
 - `/` — email login
