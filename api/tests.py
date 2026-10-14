@@ -4,6 +4,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
+from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 
 from accounts.models import Role, User
@@ -164,3 +165,113 @@ class JWTAuthorizationMatrixTests(APIBase):
         self.authenticate(app_admin.email)
         self.assertEqual(self.client.get("/api/users/").status_code, status.HTTP_200_OK)
         self.assertEqual(self.client.get("/django-admin/").status_code, status.HTTP_302_FOUND)
+
+
+
+class StudentRecruiterManagementTests(APIBase):
+    def test_student_can_edit_permitted_profile_fields_and_shared_skills(self):
+        self.client.force_authenticate(self.student_user)
+        another_skill = Skill.objects.create(name="Django", category="FRAMEWORK")
+        response = self.client.patch(
+            f"/api/students/{self.student.pk}/",
+            {"phone": "9876543210", "skills": [self.skill.pk, another_skill.pk]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.student.refresh_from_db()
+        self.assertEqual(self.student.phone, "9876543210")
+        self.assertSetEqual(set(self.student.skills.values_list("id", flat=True)), {self.skill.pk, another_skill.pk})
+
+    def test_admin_profile_validation_rejects_invalid_cgpa_and_graduation_year(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.patch(f"/api/students/{self.student.pk}/", {"cgpa": "10.50"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        response = self.client.patch(f"/api/students/{self.student.pk}/", {"passout_year": 2099}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        response = self.client.patch(f"/api/students/{self.student.pk}/", {"backlogs": -1}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_student_cannot_reassign_profile_to_another_user(self):
+        other_user = User.objects.create_user(email="other-student@example.com", name="Other", password="Pass1234!abc", role=Role.STUDENT)
+        self.client.force_authenticate(self.student_user)
+        response = self.client.patch(f"/api/students/{self.student.pk}/", {"user_id": other_user.pk}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_admin_can_create_student_profile_for_existing_student_account(self):
+        new_user = User.objects.create_user(email="new-student@example.com", name="New Student", password="Pass1234!abc", role=Role.STUDENT)
+        self.client.force_authenticate(self.admin)
+        response = self.client.post(
+            "/api/students/",
+            {
+                "user_id": new_user.pk,
+                "phone": "9876543210",
+                "college": self.college.pk,
+                "university_no": "NEW-U-1",
+                "address": "Munnar",
+                "age": 21,
+                "department": self.student.department_id,
+                "current_year": 4,
+                "cgpa": "8.25",
+                "backlogs": 0,
+                "passout_year": 2026,
+                "skills": [self.skill.pk],
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data["email"], new_user.email)
+        self.assertTrue(StudentProfile.objects.filter(user=new_user).exists())
+
+    def test_recruiter_search_rejects_invalid_filter_values(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.get("/api/recruiter/search/?cgpa=not-a-number")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        response = self.client.get("/api/recruiter/search/?skill_mode=neither")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_resume_extension_is_validated(self):
+        self.client.force_authenticate(self.student_user)
+        bad_file = SimpleUploadedFile("resume.exe", b"not a resume", content_type="application/octet-stream")
+        response = self.client.patch(f"/api/students/{self.student.pk}/", {"resume": bad_file}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("resume", response.data)
+
+    def test_recruiter_can_edit_only_own_phone(self):
+        self.client.force_authenticate(self.recruiter_user)
+        response = self.client.patch(f"/api/recruiters/{self.recruiter.pk}/", {"phone": "9999999999"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.recruiter.refresh_from_db()
+        self.assertEqual(self.recruiter.phone, "9999999999")
+        denied = self.client.patch(f"/api/recruiters/{self.recruiter.pk}/", {"company": self.company.pk}, format="json")
+        self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_admin_can_create_recruiter_account_and_profile(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.post(
+            "/api/recruiters/",
+            {
+                "email": "new-recruiter@example.com",
+                "name": "New Recruiter",
+                "password": "UniqueStrongPass!826",
+                "company": self.company.pk,
+                "phone": "1234567890",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data["user"]["email"], "new-recruiter@example.com")
+        created_user = User.objects.get(email="new-recruiter@example.com")
+        self.assertEqual(created_user.role, Role.RECRUITER)
+        self.assertFalse(created_user.is_staff)
+        self.assertFalse(created_user.is_superuser)
+
+    def test_company_catalogue_is_readable_but_admin_managed(self):
+        self.client.force_authenticate(self.student_user)
+        response = self.client.get("/api/companies/?search=API")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        denied = self.client.post("/api/companies/", {"name": "Unauthorized Company"}, format="json")
+        self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
+        self.client.force_authenticate(self.admin)
+        allowed = self.client.post("/api/companies/", {"name": "Managed Company"}, format="json")
+        self.assertEqual(allowed.status_code, status.HTTP_201_CREATED, allowed.data)

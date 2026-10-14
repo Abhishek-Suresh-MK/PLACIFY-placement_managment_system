@@ -1,6 +1,7 @@
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import filters, status, viewsets
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -113,25 +114,47 @@ class CompanyViewSet(viewsets.ModelViewSet):
     queryset = Company.objects.all()
     serializer_class = CompanySerializer
     permission_classes = [IsAuthenticated, IsAdminOrReadOnly]
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ["is_active", "location"]
     search_fields = ["name", "location"]
     ordering_fields = ["name", "created_at"]
 
 
-class RecruiterProfileViewSet(viewsets.ReadOnlyModelViewSet):
+class RecruiterProfileViewSet(viewsets.ModelViewSet):
     serializer_class = RecruiterProfileSerializer
     permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["user__name", "user__email", "company__name"]
+    ordering_fields = ["user__name", "company__name", "created_at"]
 
     def get_queryset(self):
-        return RecruiterProfile.objects.select_related("user", "company") if is_admin(self.request.user) else RecruiterProfile.objects.filter(user=self.request.user).select_related("user", "company")
+        qs = RecruiterProfile.objects.select_related("user", "company")
+        return qs.order_by("user__email") if is_admin(self.request.user) else qs.filter(user=self.request.user)
+
+    def create(self, request, *args, **kwargs):
+        if not is_admin(request.user):
+            raise PermissionDenied("Only administrators can create recruiter profiles.")
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        if not is_admin(request.user):
+            if set(request.data.keys()) - {"phone"}:
+                raise PermissionDenied("Recruiters may update only their phone number.")
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        if not is_admin(request.user):
+            raise PermissionDenied("Only administrators can delete recruiter profiles.")
+        return super().destroy(request, *args, **kwargs)
 
 
 class StudentProfileViewSet(viewsets.ModelViewSet):
     serializer_class = StudentProfileSerializer
     permission_classes = [IsAuthenticated]
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ["college", "department", "current_year", "cgpa", "backlogs", "passout_year", "is_active", "skills"]
     search_fields = ["user__name", "user__email", "college__name", "department__name", "university_no"]
-    ordering_fields = ["id", "user__name", "cgpa", "created_at"]
+    ordering_fields = ["id", "user__name", "cgpa", "backlogs", "passout_year", "created_at"]
 
     def get_queryset(self):
         u = self.request.user
@@ -148,11 +171,21 @@ class StudentProfileViewSet(viewsets.ModelViewSet):
         return StudentProfileSerializer
 
     def create(self, request, *args, **kwargs):
-        raise PermissionDenied("Student accounts are created through the registration/admin workflow.")
+        if not is_admin(request.user):
+            raise PermissionDenied("Student accounts are created through registration; only administrators can create profiles here.")
+        return super().create(request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
         if request.user.role == Role.RECRUITER:
-            raise PermissionDenied("Recruiters can view candidate profiles but cannot edit them.")
+            # Check visibility first. The filtered queryset returns 404
+            # for student profiles this recruiter cannot access.
+            self.get_object()
+
+            # The profile is visible, but recruiters cannot modify it.
+            raise PermissionDenied(
+                "Recruiters can view candidate profiles but cannot edit them."
+            )
+
         return super().update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
@@ -371,17 +404,28 @@ class RecruiterSearchViewSet(viewsets.GenericViewSet):
         q = request.query_params.get("search", "").strip()
         if q:
             qs = qs.filter(Q(user__name__icontains=q) | Q(user__email__icontains=q) | Q(college__name__icontains=q) | Q(department__name__icontains=q))
-        if request.query_params.get("cgpa"):
+        cgpa = request.query_params.get("cgpa")
+        if cgpa not in (None, ""):
             try:
-                qs = qs.filter(cgpa__gte=float(request.query_params["cgpa"]))
-            except ValueError:
-                pass
-        if request.query_params.get("college"):
-            qs = qs.filter(college_id=request.query_params["college"])
-        if request.query_params.get("department"):
-            qs = qs.filter(department_id=request.query_params["department"])
-        skill_ids = [x for x in request.query_params.getlist("skills") if x.isdigit()]
-        mode = request.query_params.get("skill_mode", "all")
+                minimum_cgpa = float(cgpa)
+            except (TypeError, ValueError):
+                raise ValidationError({"cgpa": "Enter a number between 0 and 10."})
+            if not 0 <= minimum_cgpa <= 10:
+                raise ValidationError({"cgpa": "CGPA must be between 0 and 10."})
+            qs = qs.filter(cgpa__gte=minimum_cgpa)
+        for param, model in (("college", College), ("department", Department)):
+            value = request.query_params.get(param)
+            if value not in (None, ""):
+                if not value.isdigit() or not model.objects.filter(pk=int(value)).exists():
+                    raise ValidationError({param: "Select a valid record ID."})
+                qs = qs.filter(**{f"{param}_id": int(value)})
+        raw_skill_ids = request.query_params.getlist("skills")
+        if any(not value.isdigit() for value in raw_skill_ids):
+            raise ValidationError({"skills": "Supply valid skill IDs."})
+        skill_ids = [int(value) for value in raw_skill_ids]
+        mode = request.query_params.get("skill_mode", "all").lower()
+        if mode not in {"all", "any"}:
+            raise ValidationError({"skill_mode": "Use 'all' or 'any'."})
         if skill_ids:
             if mode == "any":
                 qs = qs.filter(skills__id__in=skill_ids)

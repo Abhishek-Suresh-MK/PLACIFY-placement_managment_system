@@ -40,16 +40,74 @@ class CompanySerializer(serializers.ModelSerializer):
 
 class RecruiterProfileSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
+    user_id = serializers.PrimaryKeyRelatedField(
+        source="user",
+        queryset=User.objects.filter(role=Role.RECRUITER),
+        write_only=True,
+        required=False,
+    )
     company_name = serializers.CharField(source="company.name", read_only=True)
+    email = serializers.EmailField(write_only=True, required=False)
+    name = serializers.CharField(write_only=True, required=False, max_length=150)
+    password = serializers.CharField(write_only=True, required=False, trim_whitespace=False, style={"input_type": "password"})
 
     class Meta:
         model = RecruiterProfile
-        fields = ["id", "user", "company", "company_name", "phone", "created_at", "updated_at"]
+        fields = ["id", "user", "user_id", "email", "name", "password", "company", "company_name", "phone", "created_at", "updated_at"]
         read_only_fields = ["id", "user", "created_at", "updated_at"]
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        if request and not (request.user.is_superuser or request.user.role == Role.ADMIN):
+            # Recruiters may update only their own phone number.
+            if self.instance is None:
+                raise serializers.ValidationError("Only administrators can create recruiter profiles.")
+            forbidden = set(attrs) - {"phone"}
+            if forbidden:
+                raise serializers.ValidationError("Recruiters may update only their phone number.")
+        if self.instance is None and "user" not in attrs:
+            required = {"email", "name", "password"}
+            missing = sorted(required - set(attrs))
+            if missing:
+                raise serializers.ValidationError({field: "This field is required when creating a recruiter account." for field in missing})
+            if User.objects.filter(email__iexact=attrs["email"]).exists():
+                raise serializers.ValidationError({"email": "A user with this email already exists."})
+            from django.contrib.auth.password_validation import validate_password
+            try:
+                validate_password(attrs["password"], user=User(email=attrs["email"], name=attrs["name"]))
+            except Exception as exc:
+                raise serializers.ValidationError({"password": list(exc.messages) if hasattr(exc, "messages") else str(exc)})
+        if "user" in attrs and RecruiterProfile.objects.filter(user=attrs["user"]).exclude(pk=getattr(self.instance, "pk", None)).exists():
+            raise serializers.ValidationError({"user_id": "This user already has a recruiter profile."})
+        return attrs
+
+    def create(self, validated_data):
+        user = validated_data.pop("user", None)
+        if user is None:
+            email = validated_data.pop("email").strip().lower()
+            name = validated_data.pop("name")
+            password = validated_data.pop("password")
+            user = User.objects.create_user(email=email, name=name, password=password, role=Role.RECRUITER)
+        else:
+            validated_data.pop("email", None)
+            validated_data.pop("name", None)
+            validated_data.pop("password", None)
+        return RecruiterProfile.objects.create(user=user, **validated_data)
+
+    def update(self, instance, validated_data):
+        for field in ("email", "name", "password"):
+            validated_data.pop(field, None)
+        return super().update(instance, validated_data)
 
 
 class StudentProfileSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
+    user_id = serializers.PrimaryKeyRelatedField(
+        source="user",
+        queryset=User.objects.filter(role=Role.STUDENT),
+        write_only=True,
+        required=False,
+    )
     name = serializers.CharField(source="user.name", read_only=True)
     email = serializers.EmailField(source="user.email", read_only=True)
     college_name = serializers.CharField(source="college.name", read_only=True)
@@ -60,11 +118,84 @@ class StudentProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudentProfile
         fields = [
-            "id", "user", "name", "email", "phone", "photo", "college", "college_name",
+            "id", "user", "user_id", "name", "email", "phone", "photo", "college", "college_name",
             "university_no", "address", "age", "department", "department_name", "department_code",
             "current_year", "cgpa", "backlogs", "passout_year", "skills", "resume", "is_active", "created_at", "updated_at",
         ]
-        read_only_fields = ["id", "user", "created_at", "updated_at", "is_active"]
+        read_only_fields = ["id", "user", "created_at", "updated_at"]
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        is_admin = bool(request and request.user.is_authenticated and (
+            request.user.is_superuser or request.user.role == Role.ADMIN
+        ))
+        if self.instance is None:
+            if not is_admin:
+                raise serializers.ValidationError("Only administrators can create student profiles through this endpoint.")
+            if "user" not in attrs:
+                raise serializers.ValidationError({"user_id": "This field is required when creating a student profile."})
+        elif "user" in attrs and attrs["user"].pk != self.instance.user_id:
+            raise serializers.ValidationError({"user_id": "A profile cannot be reassigned to another account."})
+        if not is_admin and "user" in attrs:
+            raise serializers.ValidationError({"user_id": "You cannot change the account linked to your profile."})
+        if "user" in attrs and StudentProfile.objects.filter(user=attrs["user"]).exclude(pk=getattr(self.instance, "pk", None)).exists():
+            raise serializers.ValidationError({"user_id": "This user already has a student profile."})
+        return attrs
+
+    def validate_passout_year(self, value):
+        from datetime import date
+        current_year = date.today().year
+        if value < 2000 or value > current_year + 8:
+            raise serializers.ValidationError(f"Graduation year must be between 2000 and {current_year + 8}.")
+        return value
+
+    def validate_cgpa(self, value):
+        if value < 0 or value > 10:
+            raise serializers.ValidationError("CGPA must be between 0 and 10.")
+        return value
+
+    def validate_backlogs(self, value):
+        if value < 0:
+            raise serializers.ValidationError("Backlogs cannot be negative.")
+        return value
+
+    def validate_college(self, value):
+        if not value.is_active:
+            raise serializers.ValidationError("Select an active college.")
+        return value
+
+    def validate_department(self, value):
+        if not value.is_active:
+            raise serializers.ValidationError("Select an active department.")
+        return value
+
+    def validate_skills(self, value):
+        inactive = [skill.name for skill in value if not skill.is_active]
+        if inactive:
+            raise serializers.ValidationError("Only active skills from the shared catalogue may be selected.")
+        return value
+
+    def validate_photo(self, value):
+        if value and value.size > 5 * 1024 * 1024:
+            raise serializers.ValidationError("Profile photo must be 5 MB or smaller.")
+        return value
+
+    def validate_resume(self, value):
+        if value:
+            if value.size > 5 * 1024 * 1024:
+                raise serializers.ValidationError("Resume must be 5 MB or smaller.")
+            name = value.name.lower()
+            if not name.endswith((".pdf", ".doc", ".docx")):
+                raise serializers.ValidationError("Resume must be a PDF, DOC, or DOCX file.")
+            if name.endswith(".pdf"):
+                position = value.tell()
+                try:
+                    value.seek(0)
+                    if value.read(5) != b"%PDF-":
+                        raise serializers.ValidationError("The uploaded file is not a valid PDF.")
+                finally:
+                    value.seek(position)
+        return value
 
     def get_extra_kwargs(self):
         extra = super().get_extra_kwargs()
@@ -72,7 +203,7 @@ class StudentProfileSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated and request.user.role == Role.STUDENT:
             # Eligibility and identity fields are managed by the placement office,
             # not self-reported through the public profile endpoint.
-            for field in ("college", "university_no", "age", "department", "current_year", "cgpa", "backlogs", "passout_year"):
+            for field in ("college", "university_no", "age", "department", "current_year", "cgpa", "backlogs", "passout_year", "is_active"):
                 extra[field] = {**extra.get(field, {}), "read_only": True}
         return extra
 
