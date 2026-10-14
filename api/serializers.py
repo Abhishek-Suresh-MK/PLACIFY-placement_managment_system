@@ -66,6 +66,30 @@ class StudentProfileSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "user", "created_at", "updated_at", "is_active"]
 
+    def get_extra_kwargs(self):
+        extra = super().get_extra_kwargs()
+        request = self.context.get("request")
+        if request and request.user.is_authenticated and request.user.role == Role.STUDENT:
+            # Eligibility and identity fields are managed by the placement office,
+            # not self-reported through the public profile endpoint.
+            for field in ("college", "university_no", "age", "department", "current_year", "cgpa", "backlogs", "passout_year"):
+                extra[field] = {**extra.get(field, {}), "read_only": True}
+        return extra
+
+
+class RecruiterCandidateProfileSerializer(serializers.ModelSerializer):
+    """Minimum candidate data visible to recruiters for assigned-drive applicants."""
+    name = serializers.CharField(source="user.name", read_only=True)
+    email = serializers.EmailField(source="user.email", read_only=True)
+    college_name = serializers.CharField(source="college.name", read_only=True)
+    department_name = serializers.CharField(source="department.name", read_only=True)
+    skills = serializers.SlugRelatedField(many=True, read_only=True, slug_field="name")
+
+    class Meta:
+        model = StudentProfile
+        fields = ["id", "name", "email", "phone", "college_name", "department_name", "current_year", "cgpa", "backlogs", "passout_year", "skills", "resume"]
+        read_only_fields = fields
+
 
 class PlacementDriveSerializer(serializers.ModelSerializer):
     company_name = serializers.CharField(source="company.name", read_only=True)

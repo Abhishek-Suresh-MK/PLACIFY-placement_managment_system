@@ -58,7 +58,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
-    "rest_framework.authtoken",
+    "rest_framework_simplejwt.token_blacklist",
     "django_filters",
     "drf_spectacular",
     "accounts",
@@ -189,8 +189,7 @@ if not DEBUG:
 # --------------------------------------------------------------------------
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.SessionAuthentication",
-        "rest_framework.authentication.TokenAuthentication",
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
@@ -204,6 +203,17 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "EXCEPTION_HANDLER": "rest_framework.views.exception_handler",
+}
+
+from datetime import timedelta
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=5),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": True,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
 }
 
 # --------------------------------------------------------------------------
@@ -223,23 +233,14 @@ SPECTACULAR_SETTINGS = {
         {"name": "placements", "description": "Placement history and study materials"},
         {"name": "announcements", "description": "Announcements and notifications"},
     ],
-    "SECURITY": [
-        {"SessionAuth": []},
-        {"TokenAuth": []},
-    ],
+    "SECURITY": [{"BearerAuth": []}],
     "COMPONENTS": {
         "securitySchemes": {
-            "SessionAuth": {
-                "type": "apiKey",
-                "in": "cookie",
-                "name": "sessionid",
-            },
-            "TokenAuth": {
-                "type": "apiKey",
-                "in": "header",
-                "name": "Authorization",
-                "description": "Token authentication (format: 'Token <token>')",
-            },
+            "BearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT",
+            }
         }
     },
     "ENUM_NAME_OVERRIDES": {

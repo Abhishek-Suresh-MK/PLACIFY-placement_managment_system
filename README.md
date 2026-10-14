@@ -53,6 +53,28 @@ The seed creates CEM as the primary college, plus two comparison colleges for te
 - `/admin-panel/` — administrator dashboard
 - `/django-admin/` — Django administrative interface
 
+
+## API authentication and authorization
+
+The API uses **Simple JWT** bearer authentication. Install dependencies, apply migrations (including `rest_framework_simplejwt.token_blacklist`), and then use:
+
+- `POST /api/auth/token/` with `{"email":"...", "password":"..."}` to obtain `access` and `refresh` tokens.
+- Send the access token as `Authorization: Bearer <access>`; access tokens expire after 5 minutes.
+- `POST /api/auth/token/refresh/` with `{"refresh":"<refresh>"}` to rotate the refresh token. The previous refresh token is blacklisted.
+- `POST /api/auth/logout/` with a valid access bearer token and `{"refresh":"<refresh>"}` to blacklist the caller's refresh token. A refresh token belonging to another user is rejected. Already-issued access tokens are stateless and remain valid for at most their 5-minute lifetime; clients should discard them immediately on logout.
+
+Refresh-token blacklisting requires running `python manage.py migrate`. Schedule `python manage.py flushexpiredtokens` periodically to remove expired blacklist records.
+
+### Authorization boundaries
+
+- Public registration always creates a `student`; submitted role values are not accepted.
+- An application administrator (`role=admin`) is not automatically a Django staff user or Django superuser. Django admin-site access requires Django's separate staff/superuser flags.
+- Students can read only their own profile, applications and results. Student profile updates cannot change placement-office-controlled eligibility fields (college, department, university number, academic year, CGPA, backlogs or graduation year).
+- Recruiters can read only candidates who have applied to drives assigned to that recruiter. Recruiter candidate responses omit address and university number. Recruiters can access only assigned drives and their applications, and may update only application status and remarks. Recruiters cannot edit student profiles or official results.
+- Application administrators manage placement records through application APIs; only Django superusers/staff with permissions can access `/django-admin/`.
+
+Run the authorization matrix with `python manage.py test api.tests.JWTAuthorizationMatrixTests api.tests.APIArchitectureTests`.
+
 ## API
 Both `/api/` and `/api/v1/` are available.
 

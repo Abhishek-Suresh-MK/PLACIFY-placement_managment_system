@@ -22,8 +22,10 @@ class UserManager(BaseUserManager):
         return user
 
     def create_user(self, email, password=None, **extra_fields):
-        extra_fields.setdefault("is_staff", False)
-        extra_fields.setdefault("is_superuser", False)
+        # Application roles never grant Django admin-site/superuser privileges.
+        # Only create_superuser() may set these Django authorization flags.
+        extra_fields["is_staff"] = False
+        extra_fields["is_superuser"] = False
         return self._create_user(email, password, **extra_fields)
 
     def create_superuser(self, email, password=None, **extra_fields):
@@ -62,4 +64,5 @@ class User(AbstractUser):
 
     @property
     def is_admin_role(self):
-        return self.role == Role.ADMIN or self.is_superuser
+        """Application-level administrator role, independent of Django superuser status."""
+        return self.role == Role.ADMIN

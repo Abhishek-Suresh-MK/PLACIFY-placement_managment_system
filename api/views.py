@@ -1,11 +1,12 @@
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import filters, status, viewsets
-from rest_framework.authtoken.models import Token
-from rest_framework.authtoken.views import ObtainAuthToken
+from rest_framework.views import APIView
+from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from accounts.models import Role, User
@@ -45,23 +46,23 @@ def eligible(profile, drive):
     return not reasons, reasons
 
 
-class AuthTokenView(ObtainAuthToken):
-    permission_classes = [AllowAny]
-
-    def post(self, request, *args, **kwargs):
-        serializer = self.serializer_class(data=request.data, context={"request": request})
-        serializer.is_valid(raise_exception=True)
-        token, _ = Token.objects.get_or_create(user=serializer.validated_data["user"])
-        return Response({"token": token.key, "user": UserSerializer(serializer.validated_data["user"]).data})
-
-
-class LogoutView(viewsets.ViewSet):
+class LogoutView(APIView):
+    """Blacklist the caller's refresh token; short-lived access tokens expire in 5 minutes."""
     permission_classes = [IsAuthenticated]
 
-    def create(self, request):
-        if hasattr(request.user, "auth_token"):
-            request.user.auth_token.delete()
-        return Response({"detail": "Successfully logged out."})
+    def post(self, request):
+        raw_refresh = request.data.get("refresh")
+        if not raw_refresh:
+            return Response({"detail": "The refresh token is required."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            token = RefreshToken(raw_refresh)
+            # Do not allow a caller to revoke another user's refresh token.
+            if str(token.get("user_id")) != str(request.user.pk):
+                return Response({"detail": "Token does not belong to the authenticated user."}, status=status.HTTP_403_FORBIDDEN)
+            token.blacklist()
+        except TokenError:
+            return Response({"detail": "Refresh token is invalid, expired, or already revoked."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(status=status.HTTP_205_RESET_CONTENT)
 
 
 class UserViewSet(viewsets.ReadOnlyModelViewSet):
@@ -135,9 +136,16 @@ class StudentProfileViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         u = self.request.user
         qs = StudentProfile.objects.select_related("user", "college", "department").prefetch_related("skills")
-        if is_admin(u) or u.role == Role.RECRUITER:
+        if is_admin(u):
             return qs
+        if u.role == Role.RECRUITER:
+            return qs.filter(applications__placement_drive__recruiters__user=u).distinct()
         return qs.filter(user=u)
+
+    def get_serializer_class(self):
+        if self.request.user.role == Role.RECRUITER and not is_admin(self.request.user):
+            return RecruiterCandidateProfileSerializer
+        return StudentProfileSerializer
 
     def create(self, request, *args, **kwargs):
         raise PermissionDenied("Student accounts are created through the registration/admin workflow.")
@@ -217,11 +225,13 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         if self.request.user.role != Role.STUDENT:
             raise PermissionDenied()
         profile = getattr(self.request.user, "student_profile", None)
+        if profile is None:
+            raise ValidationError("Student profile not found.")
         drive = serializer.validated_data["placement_drive"]
         ok, reasons = eligible(profile, drive)
         if not ok:
             raise ValidationError({"detail": reasons})
-        application = serializer.save(student=profile)
+        application = serializer.save(student=profile, status=ApplicationStatus.APPLIED, remarks="")
         Result.objects.get_or_create(application=application)
 
     def update(self, request, *args, **kwargs):
@@ -356,6 +366,8 @@ class RecruiterSearchViewSet(viewsets.GenericViewSet):
 
     def list(self, request):
         qs = StudentProfile.objects.select_related("user", "college", "department").prefetch_related("skills")
+        if not is_admin(request.user):
+            qs = qs.filter(applications__placement_drive__recruiters__user=request.user).distinct()
         q = request.query_params.get("search", "").strip()
         if q:
             qs = qs.filter(Q(user__name__icontains=q) | Q(user__email__icontains=q) | Q(college__name__icontains=q) | Q(department__name__icontains=q))
@@ -379,5 +391,7 @@ class RecruiterSearchViewSet(viewsets.GenericViewSet):
         qs = qs.distinct().order_by("user__name")
         page = self.paginate_queryset(qs)
         if page is not None:
-            return self.get_paginated_response(StudentProfileSerializer(page, many=True).data)
-        return Response(StudentProfileSerializer(qs, many=True).data)
+            serializer = StudentProfileSerializer if is_admin(request.user) else RecruiterCandidateProfileSerializer
+            return self.get_paginated_response(serializer(page, many=True).data)
+        serializer = StudentProfileSerializer if is_admin(request.user) else RecruiterCandidateProfileSerializer
+        return Response(serializer(qs, many=True).data)
