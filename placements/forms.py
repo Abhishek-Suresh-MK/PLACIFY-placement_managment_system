@@ -1,5 +1,6 @@
 from django import forms
 from django.core.exceptions import ValidationError
+from django.core.validators import URLValidator
 from django.utils import timezone
 
 from accounts.models import Role, User
@@ -151,7 +152,12 @@ class PlacementDriveForm(forms.ModelForm):
         self.fields["allowed_colleges"].queryset = College.objects.filter(is_active=True).order_by("name")
         self.fields["allowed_departments"].queryset = Department.objects.filter(is_active=True).order_by("name")
         self.fields["required_skills"].queryset = Skill.objects.filter(is_active=True).order_by("name")
-        self.fields["recruiters"].queryset = RecruiterProfile.objects.select_related("user", "company").filter(user__is_active=True, company__is_active=True).order_by("company__name", "user__name")
+        recruiter_qs = RecruiterProfile.objects.select_related("user", "company").filter(user__is_active=True, company__is_active=True).order_by("company__name", "user__name")
+        selected_company = (self.data.get("company") if self.is_bound else None) or getattr(self.instance, "company_id", None)
+        if selected_company:
+            recruiter_qs = recruiter_qs.filter(company_id=selected_company)
+        self.fields["recruiters"].queryset = recruiter_qs
+        self.fields["recruiters"].label_from_instance = lambda recruiter: f"{recruiter.user.name} — {recruiter.company.name}"
         if self.instance.pk:
             self.initial["allowed_graduation_years"] = ", ".join(str(x) for x in (self.instance.allowed_graduation_years or []))
 
@@ -202,9 +208,22 @@ class ResultEditForm(forms.ModelForm):
 
 
 class CompanyForm(forms.ModelForm):
+    website = forms.CharField(required=False, help_text="Optional. HTTP and HTTPS are supported; you may enter a domain with or without the scheme.")
+
     class Meta:
         model = Company
-        fields = ["name", "description", "website", "location", "logo", "contact_name", "contact_email", "is_active"]
+        fields = ["name", "description", "website", "location", "logo", "contact_email"]
+
+    def clean_website(self):
+        value = (self.cleaned_data.get("website") or "").strip()
+        if value and not value.lower().startswith(("http://", "https://")):
+            value = "https://" + value
+        if value:
+            try:
+                URLValidator(schemes=["http", "https"])(value)
+            except ValidationError:
+                raise ValidationError("Enter a valid HTTP or HTTPS website URL.")
+        return value
 
     def clean_logo(self):
         f = self.cleaned_data.get("logo")
@@ -215,53 +234,49 @@ class CompanyForm(forms.ModelForm):
 class CollegeForm(forms.ModelForm):
     class Meta:
         model = College
-        fields = ["name", "short_name", "location", "is_active"]
+        fields = ["name", "short_name", "location"]
 
 
 class DepartmentForm(forms.ModelForm):
     class Meta:
         model = Department
-        fields = ["name", "code", "is_active"]
+        fields = ["name", "code"]
 
 
 class SkillForm(forms.ModelForm):
     class Meta:
         model = Skill
-        fields = ["name", "category", "is_active"]
+        fields = ["name", "category"]
 
 
 class PlacementHistoryForm(forms.ModelForm):
     class Meta:
         model = PlacementHistory
-        fields = ["student", "company", "placement_drive", "job_role", "package", "placement_date", "placement_type", "status", "remarks"]
+        fields = ["student", "company", "job_role", "package", "placement_date", "placement_type", "status", "remarks"]
         widgets = {"placement_date": forms.DateInput(attrs={"type": "date"}), "remarks": forms.Textarea(attrs={"rows": 3})}
 
     def clean(self):
         cleaned = super().clean()
-        placement_type = cleaned.get("placement_type")
-        drive = cleaned.get("placement_drive")
-        if placement_type == PlacementType.ON_CAMPUS and not drive:
-            raise ValidationError("Select a placement drive for an on-campus placement.")
-        if placement_type == PlacementType.OFF_CAMPUS and drive:
-            raise ValidationError("Off-campus placements should not be linked to a placement drive.")
-        if drive and cleaned.get("company") and drive.company_id != cleaned["company"].id:
-            raise ValidationError("The selected drive belongs to a different company.")
         return cleaned
 
 
 class AnnouncementForm(forms.ModelForm):
     class Meta:
         model = Announcement
-        fields = ["title", "content", "drive_date", "status", "audience", "colleges", "placement_drive", "students"]
+        fields = ["title", "content", "drive_date", "status", "audience", "colleges", "students"]
         widgets = {"content": forms.Textarea(attrs={"rows": 5}), "colleges": forms.CheckboxSelectMultiple, "students": forms.CheckboxSelectMultiple}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["colleges"].queryset = College.objects.filter(is_active=True).order_by("name")
+        self.fields["students"].queryset = StudentProfile.objects.select_related("user", "college", "department").filter(is_active=True).order_by("user__name")
+        self.fields["students"].label_from_instance = lambda student: f"{student.user.name} — {student.user.email} — {student.college.short_name or student.college.name} — {student.department.code}"
 
     def clean(self):
         cleaned = super().clean()
         audience = cleaned.get("audience")
         if audience == AnnouncementAudience.COLLEGE and not cleaned.get("colleges"):
             raise ValidationError("Select at least one college for a college announcement.")
-        if audience == AnnouncementAudience.DRIVE and not cleaned.get("placement_drive"):
-            raise ValidationError("Select a placement drive for a drive announcement.")
         if audience == AnnouncementAudience.STUDENT and not cleaned.get("students"):
             raise ValidationError("Select at least one student for a targeted announcement.")
         return cleaned

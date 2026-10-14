@@ -274,7 +274,7 @@ class PlacementHistoryViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         u = self.request.user
-        qs = PlacementHistory.objects.select_related("student__user", "company", "placement_drive")
+        qs = PlacementHistory.objects.select_related("student__user", "company")
         if is_admin(u):
             return qs
         if u.role == Role.STUDENT:
@@ -329,7 +329,6 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
             return Announcement.objects.filter(status=AnnouncementStatus.PUBLISHED).filter(
                 Q(audience=AnnouncementAudience.GLOBAL)
                 | Q(audience=AnnouncementAudience.COLLEGE, colleges=p.college)
-                | Q(audience=AnnouncementAudience.DRIVE, placement_drive__applications__student=p)
                 | Q(audience=AnnouncementAudience.STUDENT, students=p)
             ).distinct()
         return Announcement.objects.filter(status=AnnouncementStatus.PUBLISHED)

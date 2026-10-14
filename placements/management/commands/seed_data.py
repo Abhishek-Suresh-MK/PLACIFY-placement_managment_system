@@ -78,20 +78,20 @@ class Command(BaseCommand):
             skills[name] = obj
 
         company_rows = [
-            ("Tata Consultancy Services", "IT services, consulting and business solutions.", "https://www.tcs.com", "Kochi, Kerala", "Campus Hiring Team", "campus.demo@tcs.example"),
-            ("Infosys", "Digital services and consulting roles for early-career engineers.", "https://www.infosys.com", "Thiruvananthapuram, Kerala", "Early Careers Team", "careers.demo@infosys.example"),
-            ("UST", "Digital transformation, engineering and technology services.", "https://www.ust.com", "Kochi, Kerala", "University Relations", "campus.demo@ust.example"),
-            ("Federal Bank", "Technology, analytics and digital banking opportunities.", "https://www.federalbank.co.in", "Aluva, Kerala", "Talent Acquisition", "campus.demo@federalbank.example"),
-            ("IBM", "Software, cloud, data and infrastructure technology.", "https://www.ibm.com", "Bengaluru, Karnataka", "Campus Recruiting", "campus.demo@ibm.example"),
-            ("Zoho", "Product engineering and business software.", "https://www.zoho.com", "Chennai, Tamil Nadu", "University Hiring", "campus.demo@zoho.example"),
+            ("Tata Consultancy Services", "IT services, consulting and business solutions.", "https://www.tcs.com", "Kochi, Kerala", "campus.demo@tcs.example"),
+            ("Infosys", "Digital services and consulting roles for early-career engineers.", "https://www.infosys.com", "Thiruvananthapuram, Kerala", "careers.demo@infosys.example"),
+            ("UST", "Digital transformation, engineering and technology services.", "https://www.ust.com", "Kochi, Kerala", "campus.demo@ust.example"),
+            ("Federal Bank", "Technology, analytics and digital banking opportunities.", "https://www.federalbank.co.in", "Aluva, Kerala", "campus.demo@federalbank.example"),
+            ("IBM", "Software, cloud, data and infrastructure technology.", "https://www.ibm.com", "Bengaluru, Karnataka", "campus.demo@ibm.example"),
+            ("Zoho", "Product engineering and business software.", "https://www.zoho.com", "Chennai, Tamil Nadu", "campus.demo@zoho.example"),
         ]
         companies = {}
-        for name, description, website, location, contact, email in company_rows:
+        for name, description, website, location, email in company_rows:
             obj, _ = Company.objects.update_or_create(
                 name=name,
                 defaults={
                     "description": description, "website": website, "location": location,
-                    "contact_name": contact, "contact_email": email, "is_active": True,
+                    "contact_email": email, "is_active": True,
                 },
             )
             companies[name] = obj
@@ -202,14 +202,13 @@ class Command(BaseCommand):
             )
             applications[(email, drive_title)] = app
 
-        # On-campus placement history only; every record is tied to a selected drive.
+        # Historical placement outcomes are independent records and need not reference a drive.
         for email, drive_title, role_title, package, days_ago in [
             ("student01@placify.local", "TCS — Graduate Trainee (Closed)", "Graduate Trainee", "4.20", 4),
         ]:
             PlacementHistory.objects.update_or_create(
-                student=students[email], placement_drive=drives[drive_title],
+                student=students[email], company=drives[drive_title].company, job_role=role_title,
                 defaults={
-                    "company": drives[drive_title].company, "job_role": role_title,
                     "package": Decimal(package), "placement_date": (now - timedelta(days=days_ago)).date(),
                     "placement_type": PlacementType.ON_CAMPUS,
                     "status": PlacementHistoryStatus.PLACED,
@@ -218,7 +217,7 @@ class Command(BaseCommand):
                 },
             )
 
-        # Public/global, college-targeted, drive-targeted and draft examples.
+        # Public/global, college-targeted, student-targeted and draft examples.
         self._announcement(
             "PLACIFY demo environment is ready",
             "This is demonstration content. Use the seeded student accounts to explore drive eligibility, applications and results.",
@@ -232,10 +231,11 @@ class Command(BaseCommand):
         ann.colleges.set([cem])
         ann = self._announcement(
             "TCS recruitment update",
-            "Shortlisted applicants should monitor their application status and check the recruiter instructions.",
-            AnnouncementAudience.DRIVE, AnnouncementStatus.PUBLISHED,
-            drive=drives["TCS — Assistant System Engineer"], drive_date=(now + timedelta(days=12)).date(),
+            "Students selected for this update should monitor their application status and check the recruiter instructions.",
+            AnnouncementAudience.STUDENT, AnnouncementStatus.PUBLISHED,
+            drive_date=(now + timedelta(days=12)).date(),
         )
+        ann.students.set([students["student01@placify.local"]])
         ann = self._announcement(
             "Draft: placement committee review",
             "This draft should not appear in public student-facing announcement lists.",
@@ -296,13 +296,13 @@ class Command(BaseCommand):
         )
         return college
 
-    def _announcement(self, title, content, audience, status, drive=None, drive_date=None):
+    def _announcement(self, title, content, audience, status, drive_date=None):
         published_at = timezone.now() if status == AnnouncementStatus.PUBLISHED else None
         announcement, _ = Announcement.objects.update_or_create(
             title=title,
             defaults={
                 "content": content, "audience": audience, "status": status,
-                "placement_drive": drive, "drive_date": drive_date,
+                "drive_date": drive_date,
                 "published_at": published_at,
             },
         )

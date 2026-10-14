@@ -55,10 +55,14 @@ def _eligible(profile, drive):
 # --------------------------- Public / student ---------------------------
 
 def history(request):
-    qs = PlacementHistory.objects.filter(status=PlacementHistoryStatus.PLACED).select_related("student__user", "company", "placement_drive")
+    qs = PlacementHistory.objects.filter(status=PlacementHistoryStatus.PLACED).select_related("student__user", "company")
     search = request.GET.get("search", "").strip()
     if search:
-        qs = qs.filter(Q(student__user__name__icontains=search) | Q(company__name__icontains=search))
+        qs = qs.filter(
+            Q(student__user__name__icontains=search) | Q(company__name__icontains=search)
+            | Q(job_role__icontains=search) | Q(remarks__icontains=search)
+            | Q(placement_type__icontains=search)
+        )
     return render(request, "placements/history.html", {"records": _page(request, qs), "search": search})
 
 
@@ -82,7 +86,6 @@ def dashboard(request):
     announcements = Announcement.objects.filter(status=AnnouncementStatus.PUBLISHED).filter(
         Q(audience=AnnouncementAudience.GLOBAL)
         | Q(audience=AnnouncementAudience.COLLEGE, colleges=profile.college)
-        | Q(audience=AnnouncementAudience.DRIVE, placement_drive__applications__student=profile)
         | Q(audience=AnnouncementAudience.STUDENT, students=profile)
     ).distinct().order_by("-created_at")[:10]
     fields = [profile.phone, profile.college_id, profile.university_no, profile.address, profile.department_id, profile.current_year, profile.cgpa, profile.passout_year, profile.resume, profile.photo, profile.skills.exists()]
@@ -351,13 +354,35 @@ def admin_resource(request, resource):
     else:
         form = Form(instance=obj)
     items = model.objects.all()
+    search = request.GET.get("search", "").strip()
+    if search:
+        if resource == "companies":
+            items = items.filter(Q(name__icontains=search) | Q(location__icontains=search) | Q(description__icontains=search))
+        elif resource == "colleges":
+            items = items.filter(Q(name__icontains=search) | Q(short_name__icontains=search) | Q(location__icontains=search))
+        elif resource == "departments":
+            items = items.filter(Q(name__icontains=search) | Q(code__icontains=search))
+        elif resource == "skills":
+            items = items.filter(Q(name__icontains=search) | Q(category__icontains=search))
+        elif resource == "recruiters":
+            items = items.filter(Q(user__name__icontains=search) | Q(user__email__icontains=search) | Q(company__name__icontains=search))
+        elif resource == "drives":
+            items = items.filter(Q(company__name__icontains=search) | Q(title__icontains=search) | Q(job_role__icontains=search))
+        elif resource == "history":
+            items = items.filter(Q(student__user__name__icontains=search) | Q(company__name__icontains=search) | Q(job_role__icontains=search))
+        elif resource == "announcements":
+            items = items.filter(Q(title__icontains=search) | Q(content__icontains=search))
+        elif resource == "materials":
+            items = items.filter(Q(title__icontains=search) | Q(description__icontains=search) | Q(category__icontains=search))
+        elif resource == "gallery":
+            items = items.filter(Q(title__icontains=search) | Q(description__icontains=search) | Q(company__name__icontains=search))
     if resource == "recruiters":
         items = items.select_related("user", "company")
     elif resource == "history":
-        items = items.select_related("student__user", "company", "placement_drive")
+        items = items.select_related("student__user", "company")
     elif resource == "drives":
         items = items.select_related("company")
-    return render(request, "placements/admin_resource.html", {"resource": resource, "form": form, "items": _page(request, items, 20)})
+    return render(request, "placements/admin_resource.html", {"resource": resource, "form": form, "items": _page(request, items, 20), "search": search})
 
 
 @admin_required

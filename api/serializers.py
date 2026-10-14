@@ -116,14 +116,14 @@ class PlacementHistorySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PlacementHistory
-        fields = ["id", "student", "student_name", "company", "company_name", "placement_drive", "job_role", "package", "placement_date", "placement_type", "status", "remarks", "created_by", "created_at", "updated_at"]
+        fields = ["id", "student", "student_name", "company", "company_name", "job_role", "package", "placement_date", "placement_type", "status", "remarks", "created_by", "created_at", "updated_at"]
         read_only_fields = ["id", "created_by", "created_at", "updated_at"]
 
 
 class AnnouncementSerializer(serializers.ModelSerializer):
     class Meta:
         model = Announcement
-        fields = ["id", "title", "content", "drive_date", "status", "audience", "colleges", "placement_drive", "students", "published_at", "created_at", "updated_at"]
+        fields = ["id", "title", "content", "drive_date", "status", "audience", "colleges", "students", "published_at", "created_at", "updated_at"]
         read_only_fields = ["id", "published_at", "created_at", "updated_at"]
 
 

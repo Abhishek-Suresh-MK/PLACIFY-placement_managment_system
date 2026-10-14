@@ -128,13 +128,14 @@ class AdminWorkflowTests(TestCase):
 
     def test_admin_can_create_off_campus_history(self):
         response = self.client.post(reverse("placements:admin_resource", args=["history"]), {
-            "student": self.student.pk, "company": self.company.pk, "placement_drive": "", "job_role": "Software Engineer",
+            "student": self.student.pk, "company": self.company.pk, "job_role": "Software Engineer",
             "package": "12.00", "placement_date": "2026-09-01", "placement_type": "OFF_CAMPUS", "status": "PLACED", "remarks": "External offer",
         })
         self.assertRedirects(response, reverse("placements:admin_resource", args=["history"]))
         record = PlacementHistory.objects.get(student=self.student)
         self.assertEqual(record.placement_type, PlacementType.OFF_CAMPUS)
-        self.assertIsNone(record.placement_drive)
+        self.assertEqual(record.company, self.company)
+        self.assertEqual(record.job_role, "Software Engineer")
 
     def test_admin_can_edit_results(self):
         drive = PlacementDrive.objects.create(company=self.company, title="Drive", job_role="SWE", application_start=timezone.now(), application_deadline=timezone.now() + datetime.timedelta(days=1))

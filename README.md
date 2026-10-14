@@ -6,7 +6,11 @@ PLACIFY is a Django-based placement management platform for students, recruiters
 - **Authentication:** email only; no username.
 - **Student:** owns and updates their profile, skills, photo and resume; applies to eligible drives.
 - **Recruiter:** has an individual recruiter account/profile linked to a company; sees assigned drives and read-only candidate profiles; can update only application status and recruiter remarks.
-- **Administrator:** manages colleges, departments, skills, companies, recruiter profiles, placement drives, applications, results, placement history and content.
+- **Administrator:** manages colleges, departments, skills, companies, recruiter profiles, placement drives, applications, results, independent historical placement outcomes and content.
+- **Historical outcomes:** placement history is a standalone record; it does not require or reference a placement drive, so legacy/off-campus outcomes can be recorded even when the student never attended a campus drive.
+- **Announcements:** target everyone, selected colleges or selected students. Student targeting and long dropdowns have inline search; drive-specific announcement targeting has been removed.
+- **Company and recruiter forms:** company contact name is not collected, website URLs may use HTTP or HTTPS (or be entered without a scheme), and placement-drive recruiter choices are scoped to the selected company.
+- **Master data:** colleges, departments, skills and companies default to active when created. The internal active flag remains available for future lifecycle management but is not a required registration field.
 
 ## Setup
 ```powershell
@@ -21,7 +25,7 @@ python manage.py test
 python manage.py runserver
 ```
 
-If you are migrating from an older local PLACIFY database, **back it up first**. This release contains a major schema redesign. For a clean evaluation, a fresh database is recommended.
+If you are migrating from an older local PLACIFY database, **back it up first**. This release contains schema updates (including removal of drive links from placement history and announcements and removal of company contact name); `python manage.py migrate` applies them. For a clean evaluation, a fresh database is recommended.
 
 ## Seeded demo accounts
 

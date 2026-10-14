@@ -3,8 +3,60 @@
 {% block content %}
 <h1>{{ resource|title }}</h1>
 <div class="grid">
-<div class="card"><h2>{% if request.GET.edit %}Edit{% else %}Add{% endif %}</h2><form method="post" enctype="multipart/form-data">{% csrf_token %}<div class="form-grid">{% for f in form %}<div class="field {% if f.name in 'description content allowed_colleges allowed_departments required_skills recruiters students' %}full{% endif %}"><label for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}{% if f.help_text %}<small class="muted">{{ f.help_text }}</small>{% endif %}{% for e in f.errors %}<span class="errors">{{ e }}</span>{% endfor %}</div>{% endfor %}</div><br><button class="btn">Save</button>{% if request.GET.edit %}<a class="btn secondary" href="{% url 'placements:admin_resource' resource %}">Cancel</a>{% endif %}</form></div>
-<div class="card"><h2>Existing records</h2><div class="list">{% for item in items %}<div class="list-row"><strong>{{ item }}</strong><span><a href="?edit={{ item.pk }}">Edit</a><form method="post" action="{% url 'placements:admin_delete_resource' resource item.pk %}" class="inline">{% csrf_token %}<button type="submit">Delete</button></form></span></div>{% empty %}<p class="muted">No records.</p>{% endfor %}</div></div>
+<div class="card"><h2>{% if request.GET.edit %}Edit{% else %}Add{% endif %}</h2><form method="post" enctype="multipart/form-data">{% csrf_token %}<div class="form-grid">{% for f in form %}<div class="field {% if f.name in 'description content allowed_colleges allowed_departments required_skills recruiters students' %}full{% endif %}" data-field="{{ f.name }}"><label for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}{% if f.help_text %}<small class="muted">{{ f.help_text }}</small>{% endif %}{% for e in f.errors %}<span class="errors">{{ e }}</span>{% endfor %}</div>{% endfor %}</div><br><button class="btn">Save</button>{% if request.GET.edit %}<a class="btn secondary" href="{% url 'placements:admin_resource' resource %}">Cancel</a>{% endif %}</form></div>
+<div class="card"><h2>Existing records</h2><form method="get" class="search-form"><input name="search" value="{{ search }}" placeholder="Search {{ resource }} by name or details"><button class="btn">Search</button>{% if request.GET.edit %}<input type="hidden" name="edit" value="{{ request.GET.edit }}">{% endif %}<a class="btn secondary" href="{% url 'placements:admin_resource' resource %}">Clear</a></form><div class="list">{% for item in items %}<div class="list-row"><strong>{{ item }}</strong><span><a href="?edit={{ item.pk }}">Edit</a><form method="post" action="{% url 'placements:admin_delete_resource' resource item.pk %}" class="inline">{% csrf_token %}<button type="submit">Delete</button></form></span></div>{% empty %}<p class="muted">No records found.</p>{% endfor %}</div></div>
 </div>
 {% include 'pagination.html' with page_obj=items %}
+<script>
+(function(){
+  // Add instant text search above large checkbox lists (students, colleges, skills, departments).
+  document.querySelectorAll('.field').forEach(function(field){
+    var list = field.querySelector('input[type="checkbox"]');
+    if (!list) return;
+    var name = field.getAttribute('data-field');
+    if (!['students','colleges','allowed_colleges','allowed_departments','required_skills','recruiters'].includes(name)) return;
+    var search = document.createElement('input'); search.type='search'; search.placeholder='Type to filter options…'; search.className='option-search'; search.style.margin='0 0 10px';
+    field.insertBefore(search, field.querySelector('ul') || field.querySelector('input[type="checkbox"]').parentElement);
+    search.addEventListener('input', function(){
+      var q=search.value.toLowerCase();
+      field.querySelectorAll('label').forEach(function(label){ label.style.display=label.textContent.toLowerCase().includes(q)?'':'none'; });
+    });
+  });
+  // Recruiter options are company-scoped. Labels include the company name, and the server validates this too.
+  var company=document.querySelector('[name="company"]');
+  var recruiterField=document.querySelector('[data-field="recruiters"]');
+  function filterRecruiters(){
+    if(!company || !recruiterField) return;
+    var selected=company.options[company.selectedIndex]; var companyName=selected?selected.text.trim().toLowerCase():'';
+    recruiterField.querySelectorAll('label').forEach(function(label){
+      var matches=!companyName || label.textContent.toLowerCase().includes('— '+companyName);
+      label.style.display=matches?'':'none';
+      var input=label.querySelector('input'); if(input && !matches) input.checked=false;
+    });
+  }
+  if(company && recruiterField){company.addEventListener('change',filterRecruiters); filterRecruiters();}
+  // Searchable native select controls for long lists (student, company, college, department, etc.).
+  document.querySelectorAll('.field select').forEach(function(select){
+    if(select.multiple || select.options.length < 8) return;
+    var search=document.createElement('input'); search.type='search'; search.placeholder='Search options…'; search.className='select-search'; search.style.margin='0 0 8px';
+    select.parentElement.insertBefore(search, select);
+    search.addEventListener('input',function(){
+      var q=search.value.toLowerCase();
+      Array.from(select.options).forEach(function(option){
+        if(option.value==='') {option.hidden=false; return;}
+        option.hidden=!option.text.toLowerCase().includes(q);
+      });
+      if(select.selectedOptions.length && select.selectedOptions[0].hidden) select.value='';
+    });
+  });
+  var audience=document.querySelector('[name="audience"]');
+  function audienceFields(){
+    if(!audience)return;
+    var college=document.querySelector('[data-field="colleges"]'); var students=document.querySelector('[data-field="students"]');
+    if(college)college.style.opacity=audience.value==='COLLEGE'?'1':'.75';
+    if(students)students.style.opacity=audience.value==='STUDENT'?'1':'.75';
+  }
+  if(audience){audience.addEventListener('change',audienceFields);audienceFields();}
+})();
+</script>
 {% endblock %}

@@ -59,7 +59,6 @@ class Company(models.Model):
     website = models.URLField(blank=True)
     location = models.CharField(max_length=255, blank=True)
     logo = models.ImageField(upload_to="companies/logos/", blank=True, null=True)
-    contact_name = models.CharField(max_length=150, blank=True)
     contact_email = models.EmailField(blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -234,7 +233,6 @@ class PlacementHistoryStatus(models.TextChoices):
 class PlacementHistory(models.Model):
     student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name="placement_history")
     company = models.ForeignKey(Company, on_delete=models.PROTECT, related_name="placement_history")
-    placement_drive = models.ForeignKey(PlacementDrive, null=True, blank=True, on_delete=models.PROTECT, related_name="placement_history")
     job_role = models.CharField(max_length=255)
     package = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True, help_text="Package in LPA")
     placement_date = models.DateField()
@@ -249,13 +247,6 @@ class PlacementHistory(models.Model):
         ordering = ["-placement_date"]
         verbose_name_plural = "Placement history"
 
-    def clean(self):
-        from django.core.exceptions import ValidationError
-        if self.placement_type == PlacementType.ON_CAMPUS and not self.placement_drive_id:
-            raise ValidationError({"placement_drive": "An on-campus placement must be linked to a placement drive."})
-        if self.placement_type == PlacementType.OFF_CAMPUS and self.placement_drive_id:
-            raise ValidationError({"placement_drive": "Off-campus placements should not be linked to a campus drive."})
-
     def __str__(self):
         return f"{self.student.user.name} — {self.company.name} — {self.job_role}"
 
@@ -268,7 +259,6 @@ class AnnouncementStatus(models.TextChoices):
 class AnnouncementAudience(models.TextChoices):
     GLOBAL = "GLOBAL", "Everyone"
     COLLEGE = "COLLEGE", "Selected colleges"
-    DRIVE = "DRIVE", "Placement drive applicants"
     STUDENT = "STUDENT", "Specific students"
 
 
@@ -279,7 +269,6 @@ class Announcement(models.Model):
     status = models.CharField(max_length=10, choices=AnnouncementStatus.choices, default=AnnouncementStatus.DRAFT)
     audience = models.CharField(max_length=20, choices=AnnouncementAudience.choices, default=AnnouncementAudience.GLOBAL)
     colleges = models.ManyToManyField(College, blank=True, related_name="announcements")
-    placement_drive = models.ForeignKey(PlacementDrive, null=True, blank=True, on_delete=models.PROTECT, related_name="announcements")
     students = models.ManyToManyField(StudentProfile, blank=True, related_name="targeted_announcements")
     published_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
