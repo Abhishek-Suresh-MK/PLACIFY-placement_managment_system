@@ -6,7 +6,7 @@ from django.utils import timezone
 from accounts.models import Role, User
 from .models import (
     Announcement, AnnouncementAudience, Application, ApplicationStatus, Company, College,
-    Department, Gallery, PlacementDrive, PlacementHistory, PlacementHistoryStatus,
+    Department, Gallery, PlacementDrive, PlacementDriveStatus, PlacementHistory, PlacementHistoryStatus,
     PlacementType, RecruiterProfile, Result, Skill, StudyMaterial, StudentProfile,
 )
 
@@ -185,6 +185,13 @@ class PlacementDriveForm(forms.ModelForm):
         start, deadline = cleaned.get("application_start"), cleaned.get("application_deadline")
         if start and deadline and deadline < start:
             raise ValidationError("Application deadline cannot be before application start.")
+        status_value = cleaned.get("status")
+        if status_value == PlacementDriveStatus.OPEN:
+            if deadline and deadline < timezone.now():
+                self.add_error("application_deadline", "An expired drive cannot be published as open.")
+            company_for_drive = cleaned.get("company")
+            if company_for_drive and not company_for_drive.is_active:
+                self.add_error("company", "An inactive company cannot publish a drive.")
         company = cleaned.get("company")
         recruiters = cleaned.get("recruiters")
         if company and recruiters:

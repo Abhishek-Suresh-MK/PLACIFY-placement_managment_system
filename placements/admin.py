@@ -1,5 +1,6 @@
 from django.contrib import admin
 
+from .forms import PlacementDriveForm
 from .models import (
     Announcement, Application, College, Company, Department, Gallery, PlacementDrive,
     PlacementHistory, RecruiterProfile, Result, Skill, StudentProfile, StudyMaterial,
@@ -55,6 +56,7 @@ class CompanyAdmin(admin.ModelAdmin):
 
 @admin.register(PlacementDrive)
 class PlacementDriveAdmin(admin.ModelAdmin):
+    form = PlacementDriveForm
     list_display = ("title", "company", "job_role", "status", "application_deadline")
     list_filter = ("status", "employment_type", "company")
     search_fields = ("title", "job_role", "company__name")

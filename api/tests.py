@@ -53,6 +53,40 @@ class APIArchitectureTests(APIBase):
         response = self.client.patch(f"/api/applications/{app.pk}/", {"student": self.student.pk}, format="json")
         self.assertEqual(response.status_code, 403)
 
+
+    def test_student_application_api_rejects_inactive_profile(self):
+        start = timezone.now() - datetime.timedelta(hours=1)
+        drive = PlacementDrive.objects.create(company=self.company, title="API Drive", job_role="SWE", application_start=start, application_deadline=start + datetime.timedelta(days=1), status="OPEN")
+        self.student.is_active = False
+        self.student.save(update_fields=["is_active"])
+        self.client.force_authenticate(self.student_user)
+        response = self.client.post("/api/applications/", {"placement_drive": drive.pk}, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(Application.objects.filter(student=self.student, placement_drive=drive).exists())
+
+    def test_student_can_withdraw_own_application_through_api(self):
+        start = timezone.now() - datetime.timedelta(hours=1)
+        drive = PlacementDrive.objects.create(company=self.company, title="API Drive", job_role="SWE", application_start=start, application_deadline=start + datetime.timedelta(days=1), status="OPEN")
+        app = Application.objects.create(student=self.student, placement_drive=drive)
+        Result.objects.create(application=app)
+        self.client.force_authenticate(self.student_user)
+        response = self.client.post(f"/api/applications/{app.pk}/withdraw/")
+        self.assertEqual(response.status_code, 200)
+        app.refresh_from_db()
+        self.assertEqual(app.status, "WITHDRAWN")
+
+    def test_recruiter_cannot_move_terminal_application_status(self):
+        start = timezone.now() - datetime.timedelta(hours=1)
+        drive = PlacementDrive.objects.create(company=self.company, title="API Drive", job_role="SWE", application_start=start, application_deadline=start + datetime.timedelta(days=1), status="OPEN")
+        drive.recruiters.add(self.recruiter)
+        app = Application.objects.create(student=self.student, placement_drive=drive, status="SELECTED")
+        Result.objects.create(application=app)
+        self.client.force_authenticate(self.recruiter_user)
+        response = self.client.patch(f"/api/applications/{app.pk}/", {"status": "SHORTLISTED"}, format="json")
+        self.assertEqual(response.status_code, 400)
+        app.refresh_from_db()
+        self.assertEqual(app.status, "SELECTED")
+
     def test_admin_can_manage_results(self):
         start = timezone.now()
         drive = PlacementDrive.objects.create(company=self.company, title="API Drive", job_role="SWE", application_start=start, application_deadline=start + datetime.timedelta(days=1))

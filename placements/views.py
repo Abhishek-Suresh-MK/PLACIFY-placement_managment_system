@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.core.paginator import Paginator
+from rest_framework.exceptions import ValidationError as DRFValidationError
 
 from accounts.decorators import admin_required, recruiter_required, student_required
 from accounts.models import Role
@@ -15,6 +16,7 @@ from .forms import (
     ResultEditForm, SkillForm, StudentProfileForm, StudyMaterialForm,
 )
 from .models import *
+from .services.workflow import check_eligibility, submit_application, withdraw_application as withdraw_application_record, validate_recruiter_transition
 
 User = get_user_model()
 
@@ -24,32 +26,8 @@ def _page(request, qs, size=20):
 
 
 def _eligible(profile, drive):
-    reasons = []
-    if not profile.is_active:
-        reasons.append("Your student account is inactive.")
-    if profile.cgpa < drive.minimum_cgpa:
-        reasons.append(f"CGPA below required minimum ({drive.minimum_cgpa}).")
-    if profile.backlogs > drive.maximum_backlogs:
-        reasons.append(f"Backlogs exceed maximum allowed ({drive.maximum_backlogs}).")
-    if drive.allowed_colleges.exists() and not drive.allowed_colleges.filter(pk=profile.college_id).exists():
-        reasons.append("Your college is not included in this drive.")
-    if drive.allowed_departments.exists() and not drive.allowed_departments.filter(pk=profile.department_id).exists():
-        reasons.append("Your department is not eligible.")
-    years = {int(x) for x in (drive.allowed_graduation_years or [])}
-    if years and profile.passout_year not in years:
-        reasons.append("Your graduation year is not eligible.")
-    required = set(drive.required_skills.filter(is_active=True).values_list("id", flat=True))
-    owned = set(profile.skills.filter(is_active=True).values_list("id", flat=True))
-    if required - owned:
-        reasons.append("You do not have all required skills.")
-    now = timezone.now()
-    if drive.status != PlacementDriveStatus.OPEN:
-        reasons.append("This placement drive is not open.")
-    if now < drive.application_start:
-        reasons.append("Applications have not started yet.")
-    if now > drive.application_deadline:
-        reasons.append("The application deadline has passed.")
-    return not reasons, reasons
+    """Backward-compatible wrapper around the shared workflow eligibility rules."""
+    return check_eligibility(profile, drive)
 
 
 # --------------------------- Public / student ---------------------------
@@ -133,13 +111,15 @@ def drive_detail(request, pk):
 def apply_drive(request, pk):
     profile = get_object_or_404(StudentProfile, user=request.user)
     drive = get_object_or_404(PlacementDrive, pk=pk)
-    eligible, reasons = _eligible(profile, drive)
-    if not eligible:
-        messages.error(request, "Cannot apply: " + " ".join(reasons))
+    try:
+        application, created = submit_application(profile, drive)
+    except DRFValidationError as exc:
+        detail = exc.detail
+        if isinstance(detail, dict):
+            detail = detail.get("detail", detail)
+        messages.error(request, "Cannot apply: " + " ".join(str(item) for item in (detail if isinstance(detail, (list, tuple)) else [detail])))
         return redirect("placements:drive_detail", pk=pk)
-    application, created = Application.objects.get_or_create(student=profile, placement_drive=drive)
     if created:
-        Result.objects.get_or_create(application=application)
         messages.success(request, "Application submitted successfully.")
     else:
         messages.info(request, "You have already applied to this drive.")
@@ -157,10 +137,13 @@ def applications(request):
 @require_POST
 def withdraw_application(request, pk):
     app = get_object_or_404(Application, pk=pk, student__user=request.user)
-    if app.status not in [ApplicationStatus.SELECTED, ApplicationStatus.REJECTED, ApplicationStatus.WITHDRAWN]:
-        app.status = ApplicationStatus.WITHDRAWN
-        app.save(update_fields=["status", "updated_at"])
+    try:
+        withdraw_application_record(app)
         messages.success(request, "Application withdrawn.")
+    except DRFValidationError as exc:
+        detail = exc.detail
+        message = detail.get("status", "This application cannot be withdrawn.") if isinstance(detail, dict) else detail
+        messages.error(request, str(message))
     return redirect("placements:applications")
 
 
@@ -238,6 +221,14 @@ def recruiter_update_application(request, pk):
     app = get_object_or_404(Application, pk=pk, placement_drive__recruiters=recruiter)
     form = ApplicationStatusForm(request.POST, instance=app)
     if form.is_valid():
+        try:
+            validate_recruiter_transition(app.status, form.cleaned_data["status"])
+        except Exception as exc:
+            from rest_framework.exceptions import ValidationError as DRFValidationError
+            if not isinstance(exc, DRFValidationError):
+                raise
+            messages.error(request, str(exc.detail.get("status", "Invalid application status transition.")))
+            return redirect("placements:recruiter_dashboard")
         updated = form.save()
         if updated.status == ApplicationStatus.SELECTED:
             drive = updated.placement_drive

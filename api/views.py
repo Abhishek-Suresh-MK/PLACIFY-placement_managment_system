@@ -14,6 +14,7 @@ from accounts.models import Role, User
 from placements.models import *
 from .permissions import IsAdminOrReadOnly, IsAnnouncementManager, IsRecruiterOrAdmin
 from .serializers import *
+from placements.services.workflow import check_eligibility, submit_application, validate_recruiter_transition, withdraw_application as withdraw_application_record
 
 
 def is_admin(user):
@@ -21,30 +22,8 @@ def is_admin(user):
 
 
 def eligible(profile, drive):
-    reasons = []
-    if profile.cgpa < drive.minimum_cgpa:
-        reasons.append("CGPA below minimum")
-    if profile.backlogs > drive.maximum_backlogs:
-        reasons.append("Too many backlogs")
-    if drive.allowed_colleges.exists() and not drive.allowed_colleges.filter(pk=profile.college_id).exists():
-        reasons.append("College not eligible")
-    if drive.allowed_departments.exists() and not drive.allowed_departments.filter(pk=profile.department_id).exists():
-        reasons.append("Department not eligible")
-    years = {int(x) for x in (drive.allowed_graduation_years or [])}
-    if years and profile.passout_year not in years:
-        reasons.append("Graduation year not eligible")
-    required = set(drive.required_skills.filter(is_active=True).values_list("id", flat=True))
-    owned = set(profile.skills.filter(is_active=True).values_list("id", flat=True))
-    if required - owned:
-        reasons.append("Missing required skills")
-    now = timezone.now()
-    if drive.status != PlacementDriveStatus.OPEN:
-        reasons.append("Drive is not open")
-    if now < drive.application_start:
-        reasons.append("Applications have not started")
-    if now > drive.application_deadline:
-        reasons.append("Application deadline has passed")
-    return not reasons, reasons
+    """Backward-compatible wrapper around shared workflow eligibility rules."""
+    return check_eligibility(profile, drive)
 
 
 class LogoutView(APIView):
@@ -177,15 +156,10 @@ class StudentProfileViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         if request.user.role == Role.RECRUITER:
-            # Check visibility first. The filtered queryset returns 404
-            # for student profiles this recruiter cannot access.
             self.get_object()
-
-            # The profile is visible, but recruiters cannot modify it.
             raise PermissionDenied(
                 "Recruiters can view candidate profiles but cannot edit them."
             )
-
         return super().update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
@@ -226,14 +200,16 @@ class PlacementDriveViewSet(viewsets.ModelViewSet):
         if not profile:
             raise ValidationError("Student profile not found.")
         drive = self.get_object()
-        ok, reasons = eligible(profile, drive)
-        if not ok:
-            return Response({"detail": "Not eligible", "reasons": reasons}, status=400)
-        application, created = Application.objects.get_or_create(student=profile, placement_drive=drive)
+        try:
+            application, created = submit_application(profile, drive)
+        except ValidationError as exc:
+            detail = exc.detail
+            if isinstance(detail, dict) and "detail" in detail and isinstance(detail["detail"], list):
+                return Response({"detail": "Not eligible", "reasons": detail["detail"]}, status=status.HTTP_400_BAD_REQUEST)
+            raise
         if not created:
-            return Response({"detail": "Already applied", "application": ApplicationSerializer(application).data}, status=400)
-        Result.objects.get_or_create(application=application)
-        return Response(ApplicationSerializer(application).data, status=201)
+            return Response({"detail": "Already applied", "application": ApplicationSerializer(application).data}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(ApplicationSerializer(application).data, status=status.HTTP_201_CREATED)
 
 
 class ApplicationViewSet(viewsets.ModelViewSet):
@@ -254,18 +230,21 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             return qs.filter(placement_drive__recruiters__user=u).distinct()
         return qs.none()
 
-    def perform_create(self, serializer):
-        if self.request.user.role != Role.STUDENT:
-            raise PermissionDenied()
-        profile = getattr(self.request.user, "student_profile", None)
+    def create(self, request, *args, **kwargs):
+        if request.user.role != Role.STUDENT:
+            raise PermissionDenied("Only students can submit applications.")
+        profile = getattr(request.user, "student_profile", None)
         if profile is None:
             raise ValidationError("Student profile not found.")
-        drive = serializer.validated_data["placement_drive"]
-        ok, reasons = eligible(profile, drive)
-        if not ok:
-            raise ValidationError({"detail": reasons})
-        application = serializer.save(student=profile, status=ApplicationStatus.APPLIED, remarks="")
-        Result.objects.get_or_create(application=application)
+        drive_id = request.data.get("placement_drive")
+        try:
+            drive = PlacementDrive.objects.get(pk=drive_id)
+        except (PlacementDrive.DoesNotExist, TypeError, ValueError):
+            raise ValidationError({"placement_drive": "A valid placement drive ID is required."})
+        application, created = submit_application(profile, drive)
+        if not created:
+            return Response({"detail": "Already applied", "application": ApplicationSerializer(application).data}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(ApplicationSerializer(application).data, status=status.HTTP_201_CREATED)
 
     def update(self, request, *args, **kwargs):
         if request.user.role == Role.STUDENT:
@@ -274,7 +253,20 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             allowed = set(request.data.keys()) - {"status", "remarks"}
             if allowed:
                 raise PermissionDenied("Recruiters can update only application status and remarks.")
+            application = self.get_object()
+            new_status = request.data.get("status", application.status)
+            validate_recruiter_transition(application.status, new_status)
         return super().update(request, *args, **kwargs)
+
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
+    def withdraw(self, request, pk=None):
+        if request.user.role != Role.STUDENT:
+            raise PermissionDenied("Only the applicant can withdraw an application.")
+        application = self.get_object()
+        if application.student.user_id != request.user.pk:
+            raise PermissionDenied("You can withdraw only your own application.")
+        withdraw_application_record(application)
+        return Response(ApplicationSerializer(application).data, status=status.HTTP_200_OK)
 
     def destroy(self, request, *args, **kwargs):
         if not is_admin(request.user):

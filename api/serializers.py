@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.utils import timezone
 from accounts.models import Role, User
 from placements.models import *
 
@@ -237,10 +238,17 @@ class PlacementDriveSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at"]
 
     def validate(self, data):
-        start = data.get("application_start")
-        deadline = data.get("application_deadline")
+        start = data.get("application_start", getattr(self.instance, "application_start", None))
+        deadline = data.get("application_deadline", getattr(self.instance, "application_deadline", None))
+        status_value = data.get("status", getattr(self.instance, "status", PlacementDriveStatus.DRAFT))
+        company = data.get("company", getattr(self.instance, "company", None))
         if start and deadline and deadline < start:
-            raise serializers.ValidationError("Application deadline cannot be before application start.")
+            raise serializers.ValidationError({"application_deadline": "Application deadline cannot be before application start."})
+        if status_value == PlacementDriveStatus.OPEN:
+            if deadline and deadline < timezone.now():
+                raise serializers.ValidationError({"application_deadline": "An expired drive cannot be published as open."})
+            if company and not company.is_active:
+                raise serializers.ValidationError({"company": "An inactive company cannot publish a drive."})
         return data
 
 
@@ -248,6 +256,13 @@ class ApplicationSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source="student.user.name", read_only=True)
     company = serializers.CharField(source="placement_drive.company.name", read_only=True)
     drive_title = serializers.CharField(source="placement_drive.title", read_only=True)
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        if request and request.user.role == Role.RECRUITER and self.instance and "status" in attrs:
+            from placements.services.workflow import validate_recruiter_transition
+            validate_recruiter_transition(self.instance.status, attrs["status"])
+        return attrs
 
     class Meta:
         model = Application
